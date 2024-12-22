@@ -37,7 +37,10 @@ pub fn simplex_solver(
         }
     }
 
-    extract_solution(&tableau)
+    let solution = extract_solution(&tableau);
+    let objective_value = tableau[[tableau.nrows() - 1, tableau.ncols() - 1]];
+
+    Some((solution, objective_value))
 }
 
 fn find_pivot_column(tableau: &Array2<f64>, last_row_index: usize) -> Option<usize> {
@@ -67,32 +70,43 @@ fn pivot_operation(tableau: &mut Array2<f64>, pivot_row: usize, pivot_col: usize
     //divide each val in the pivot row by the found pivot val
     tableau.row_mut(pivot_row).map_inplace(|x| *x /= pivot_value);
 
-    for row in 0..tableau.nrows() {
-        if row != pivot_row {
-            let row_factor = tableau[[row, pivot_col]]; //how much of the pivot row needs to be subtracted from the current row to make the pivot column entry zero
-            let pivot_row_copy = tableau.row(pivot_row).to_owned(); //get a coppy of the pivot row 
-            tableau
-                .row_mut(row) //get a mutable reference of the row 
-                .zip_mut_with(&pivot_row_copy, |x, &y| *x -= row_factor * y); //subtracts row_factor*pivot row val from the current row
+    for i in 0..tableau.nrows() {
+        if i != pivot_row {
+            let row_factor = tableau[[i, pivot_col]];
+            for j in 0..tableau.ncols() {
+                tableau[[i, j]] -= row_factor * tableau[[pivot_row, j]];
+            }
         }
     }
+    println!("Tableau after pivot operation:\n{:?}", tableau);
 }
 
 //extract solution and objective value from the tabeau
-fn extract_solution(tableau: &Array2<f64>) -> Option<(Array1<f64>, f64)> {
-    let last_row_index = tableau.nrows() - 1;
-    let last_col_index = tableau.ncols() - 1;
-
-    let mut solution = Array1::<f64>::zeros(tableau.ncols() - 1);
-    let basis = find_basis(tableau);
-    for &col in &basis {
-        if col < solution.len() {
-            solution[col] = tableau[[basis.iter().position(|&x| x == col).unwrap(), last_col_index]];
+fn extract_solution(tableau: &Array2<f64>) -> Array1<f64> {
+    let mut solution = Array1::zeros(tableau.ncols() - 1);
+    for j in 0..tableau.ncols() - 1 {
+        let mut is_basic = true;
+        let mut basic_row_index = None;
+        for i in 0..tableau.nrows() {
+            if tableau[[i, j]] == 1.0 {
+                if basic_row_index.is_none() {
+                    basic_row_index = Some(i);
+                } else {
+                    is_basic = false;
+                    break;
+                }
+            } else if tableau[[i, j]] != 0.0 {
+                is_basic = false;
+                break;
+            }
+        }
+        if is_basic {
+            if let Some(row_index) = basic_row_index {
+                solution[j] = tableau[[row_index, tableau.ncols() - 1]];
+            }
         }
     }
-
-    let objective_value = tableau[[last_row_index, last_col_index]];
-    Some((solution, objective_value))
+    solution
 }
 
 //find basic variables
